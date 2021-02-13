@@ -38,23 +38,22 @@ func TestSimpleSetupAndTouchFile(t *testing.T) {
 	createMask := SetAttrUID | SetAttrGID | SetAttrMode
 	newDirName := uuid.NewString()
 	ret, dirFh := Mkdir(rgwfs, rgwfs.root_fh, newDirName, stat,
-		create_mask, 0)
+		createMask, 0)
 	if ret == 0 {
 		fmt.Printf("Created new directory: %v  %+v %v %v\n", newDirName, stat, dirFh, ret)
 	} else {
-		t.Fatalf("Failed to create %v: %v\n", new_dir_name, ret)
+		t.Fatalf("Failed to create %v: %v\n", newDirName, ret)
 	}
 
 	stat = NewStat(0, 0, 0644)
-	create_mask = SetAttrUid | SetAttrGid | SetAttrMode
 
 	newFileName := uuid.NewString()
-	ret, fh := CreateFile(rgwfs, dir_fh, newFileName, stat,
-		create_mask, 0, 0)
+	ret, fh := CreateFile(rgwfs, dirFh, newFileName, stat,
+		createMask, 0, 0)
 	if ret == 0 {
-		fmt.Printf("Created new file %v in %v: %+v %v %v\n", new_file_name, new_dir_name, stat, fh, ret)
+		fmt.Printf("Created new file %v in %v: %+v %v %v\n", newFileName, newDirName, stat, fh, ret)
 	} else {
-		t.Fatalf("Failed to create %v: %v", new_file_name, ret)
+		t.Fatalf("Failed to create %v: %v", newFileName, ret)
 	}
 
 	ret = Umount(rgwfs, 0)
