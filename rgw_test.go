@@ -56,6 +56,29 @@ func TestSimpleSetupAndTouchFile(t *testing.T) {
 		t.Fatalf("Failed to create %v: %v", newFileName, ret)
 	}
 
+	// dirCh := make(chan *ReaddirResult)
+	// Readdir(rgwfs, rgwfs.root_fh, "", 0, dirCh)
+
+	err, eof := ReadDir(rgwfs, rgwfs.root_fh, "", ReaddirFlagDotDot, func(name string, err error) error {
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Printf("Readdir: %v\n", name)
+		return nil
+	})
+	fmt.Println(err, eof)
+	fmt.Println("Read first entry:")
+
+	err, eof = ReadDir(rgwfs, rgwfs.root_fh, "", ReaddirFlagDotDot, func(name string, err error) error {
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Printf("Readdir: %v\n", name)
+		return ErrStopReadDir
+	})
+
 	ret = Umount(rgwfs, 0)
-	Shutdown(rgw)
+	fmt.Println(ret)
 }

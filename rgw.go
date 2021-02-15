@@ -1,19 +1,36 @@
 package rgw
 
 // #cgo LDFLAGS: -lrgw
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <sys/stat.h>
-// #include <rados/librgw.h>
-// #include <rados/rgw_file.h>
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <sys/stat.h>
+#include <rados/librgw.h>
+#include <rados/rgw_file.h>
+
+bool ReaddirCallbackCgo(const char *name, void *arg, uint64_t offset,
+		struct stat *st, uint32_t st_mask, uint32_t flags);
+
+*/
 import "C"
-import "unsafe"
+import (
+	"errors"
+	"syscall"
+	"unsafe"
+)
 
 // Mask bits for new file / directory functions
 const (
 	SetAttrUID  uint32 = C.RGW_SETATTR_UID
 	SetAttrGID  uint32 = C.RGW_SETATTR_GID
 	SetAttrMode uint32 = C.RGW_SETATTR_MODE
+)
+
+// Readdir flags
+const (
+	ReaddirFlagNone   uint32 = C.RGW_READDIR_FLAG_NONE
+	ReaddirFlagDotDot uint32 = C.RGW_READDIR_FLAG_DOTDOT
 )
 
 // NewStat returns a C struct stat initialized with uid, gid, mode
@@ -88,4 +105,38 @@ func Mkdir(rgwFs *C.struct_rgw_fs, parentFh *C.struct_rgw_file_handle, name stri
 	var fh *C.struct_rgw_file_handle
 	ret := C.rgw_mkdir(rgwFs, parentFh, cname, stat, C.uint(mask), &fh, C.uint(flags))
 	return int(ret), fh
+}
+
+// ReadDirFunc is used as a callback for ReadDir. Returning StopReadDir stops; nil continues
+type ReadDirFunc func(name string, err error) error
+
+// ErrStopReadDir stops reading a directory when returned from ReadDirFunc
+var ErrStopReadDir = errors.New("Stop reading directory entries")
+
+// ReaddirCallback is a cgo wrapper for RGW Readdir callbacks
+//export ReaddirCallback
+func ReaddirCallback(name *C.char, arg unsafe.Pointer, offset C.uint64_t, st *C.struct_stat,
+	stMask C.uint32_t, flags C.uint32_t) C.bool {
+	fn := *(*ReadDirFunc)(arg)
+	err := fn(C.GoString(name), nil)
+	return err == nil
+}
+
+// ReadDir reads directory parentFh starting with startWithName. Calls
+// readdirFn for each directory entry. Use startWithName == "" to start at the beginning.
+func ReadDir(rgwFs *C.struct_rgw_fs, parentFh *C.struct_rgw_file_handle, startWithName string, flags uint32, readdirFn ReadDirFunc) (bool, error) {
+	cname := C.CString(startWithName)
+	defer C.free(unsafe.Pointer(cname))
+
+	var eof C.bool
+	cbargs := unsafe.Pointer(&readdirFn)
+
+	ret := C.rgw_readdir2(rgwFs, parentFh, cname,
+		(C.rgw_readdir_cb)(unsafe.Pointer(C.ReaddirCallbackCgo)), cbargs,
+		&eof, C.uint32_t(flags))
+
+	if ret == 0 {
+		return bool(eof), nil
+	}
+	return bool(eof), syscall.Errno(-ret)
 }
